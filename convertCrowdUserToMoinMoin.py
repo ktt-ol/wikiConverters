@@ -1,13 +1,10 @@
+#!env python3
+
 import xml.etree.ElementTree as ET
 from _datetime import datetime
+import argparse
 
 __author__ = 'Holger Cremer'
-
-# config
-INPUT_XML = "testdata/atlassian-crowd-2.6.4-backup-2014-07-22-175735.xml"
-OUTPUT_FOLDER = "output"
-# config end
-
 
 class User():
     USER_TEMPLATE = """# converted user, date: $conversionDate$
@@ -55,10 +52,13 @@ name=$name$
     def getName(self):
         return self.tplVars.get("name")
 
-if __name__ == '__main__':
 
-    tree = ET.parse(INPUT_XML)
+def convertUsers(input, outputDir):
+    print("Converting users...")
+
+    tree = ET.parse(input)
     root = tree.getroot()
+
     for user in root.iter('user'):
         user = User(
             id=user.find('id').text,
@@ -68,9 +68,35 @@ if __name__ == '__main__':
             createdDate=user.find('createdDate').text,
         )
 
-        with open(OUTPUT_FOLDER + "/" +  user.getFilename(), "w", encoding='utf-8') as file:
+        with open(outputDir + "/" + user.getFilename(), "w", encoding='utf-8') as file:
             file.write(user.getMoinMoinuserData())
 
-        print("Crated: " + user.getName())
+        print("Converted: " + user.getName())
 
-    print("done")
+
+def listUsersForGroup(input, groupName):
+    print("Listing users for group " + groupName)
+
+    tree = ET.parse(input)
+    root = tree.getroot()
+
+    for membership in root.findall("./memberships/membership"):
+        if membership.find("parentName").text == groupName:
+            print(membership.find("childName").text)
+
+
+if __name__ == '__main__':
+
+    parser = argparse.ArgumentParser(description='Parse user or groups')
+    parser.add_argument('inputFile', type=str, help='The crowd backup file (xml)')
+    group = parser.add_mutually_exclusive_group(required=True)
+    group.add_argument('-convertUserTo', dest="users", type=str, metavar="directory", help='Convert the user and store them into this directory')
+    group.add_argument('-group', dest="group", type=str, metavar="groupname", help='The group to get the user names for')
+    args = parser.parse_args()
+
+    if args.users:
+        convertUsers(args.inputFile, args.users)
+    elif args.group:
+        listUsersForGroup(args.inputFile, args.group)
+
+    print("\ndone")
