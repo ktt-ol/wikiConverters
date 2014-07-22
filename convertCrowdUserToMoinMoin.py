@@ -60,6 +60,10 @@ def convertUsers(input, outputDir):
     root = tree.getroot()
 
     for user in root.iter('user'):
+        isActive = user.find("active").text == "true"
+        if not isActive:
+            continue
+        
         user = User(
             id=user.find('id').text,
             name=user.find('name').text,
