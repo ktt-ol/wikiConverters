@@ -31,7 +31,8 @@ name=$name$
             "conversionTs": self.conversionDate.timestamp()
         }
 
-    def parseDate(self, date):
+    @staticmethod
+    def parseDate(date):
         """Parse time strings like this Sun Jan 15 16:20:13 +0000 2012 """
         return datetime.strptime(date, "%a %b %d %H:%M:%S %z %Y").timestamp()
 
@@ -63,7 +64,7 @@ def convertUsers(input, outputDir):
         isActive = user.find("active").text == "true"
         if not isActive:
             continue
-        
+
         user = User(
             id=user.find('id').text,
             name=user.find('name').text,
