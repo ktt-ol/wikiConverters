@@ -6,7 +6,7 @@ import time
 import calendar
 import re
 import argparse
-import common
+import config
 
 __author__ = 'Holger Cremer'
 
@@ -102,9 +102,9 @@ def add_default_user(outputDir):
     now = datetime.now()
     default_user = User(
         id="9999999",
-        name=common.DEFAULT_USER,
-        email=common.DEFAULT_USER,
-        displayName="User " + common.DEFAULT_USER
+        name=config.DEFAULT_USER,
+        email=config.DEFAULT_USER,
+        displayName="User " + config.DEFAULT_USER
     )
 
     #encoding='utf-8'

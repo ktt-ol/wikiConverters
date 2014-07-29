@@ -1,4 +1,5 @@
 #!/usr/bin/env python
+# -*- coding: utf-8 -*-
 
 """
 Converts the pages and attachments. No revisions or comments.
@@ -16,9 +17,8 @@ import StringIO
 import codecs
 
 import wikiutil
-import common
+import config
 from ConfluenceConverter.xmlparser import parse
-
 
 
 
@@ -44,11 +44,13 @@ def getPropText(node, name):
 
     return propNode.text
 
+
 def print_safe(obj):
     if type(obj) is unicode:
         return obj.encode("utf-8")
     else:
         return str(obj)
+
 
 def toString(obj, attributes):
     buffer = ""
@@ -69,10 +71,10 @@ class Space():
 
         Space.all[self.id] = self
 
-    @staticmethod
-    def getSpaceByKey(spaceKey):
+    @classmethod
+    def getSpaceByKey(cls, spaceKey):
         spaceKey = spaceKey.lower()
-        for id, space in Space.all.items():
+        for id, space in cls.all.items():
             if space.key == spaceKey:
                 return space
 
@@ -80,6 +82,11 @@ class Space():
 
     def __str__(self):
         return toString(self, ['id', 'key', 'name'])
+
+    @classmethod
+    def renameSpaces(cls, newSpaceKeyDic):
+        for space in cls.all.values():
+            space.key = newSpaceKeyDic[space.key]
 
 
 class Page():
@@ -105,11 +112,10 @@ class Page():
             self.parentId = None
         self.title = getPropText(node, "title")
         self.contentId = self._readBody(node)
-        self.versionComment = getPropText(node, "versionComment") or ""
         name = getPropText(node, "lastModifierName")
         self.lastModifierId = MoinMoinUsers.all.get(name)
         if self.lastModifierId is None:
-            self.lastModifierId = MoinMoinUsers.all.get(common.DEFAULT_USER)
+            self.lastModifierId = MoinMoinUsers.all.get(config.DEFAULT_USER)
         self.lastModificationDate = date_to_seconds(getPropText(node, "lastModificationDate"))
 
         Page.all[self.id] = self
@@ -127,6 +133,19 @@ class Page():
 
     def __str__(self):
         return toString(self, ['id', 'title', 'spaceId', 'parent', 'contentId'])
+
+    @classmethod
+    def renameHomePages(cls):
+        """
+        rename all "Home" pages to their space key
+        """
+        for page in cls.topPages.values():
+            if not page.title == "Home":
+                continue
+            # find space
+            space = Space.all.get(page.spaceId)
+            if space is None: raise StandardError("No space found for 'Home' page id " + page.spaceId)
+            page.title = space.key
 
 
 class Attachment():
@@ -172,7 +191,7 @@ class MoinMoinWriter():
         space = Space.all.get(page.spaceId)
         if space is None: raise BaseException("No Space %s found for page %s" % (page.spaceId, pageId))
 
-        pageName = self.makeFullPageName(page)
+        pageName = self._makeFullPageName(page)
         pageNamePath = join(self.outputFolder, pageName)
         if exists(pageNamePath): raise StandardError("Page %s already exists in output folder. Will not overwrite anything." % pageName)
 
@@ -183,24 +202,29 @@ class MoinMoinWriter():
 
         self._write(join(pageNamePath, "current"), "00000001")
         # http://moinmo.in/MoinDev/Storage
-        self._write(join(pageNamePath, "edit-log"), "%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s" % (
-            page.lastModificationDate * 100000,
+        self._write(join(pageNamePath, "edit-log"), "%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\n" % (
+            page.lastModificationDate * 1000000,
             "00000001",
             "SAVENEW",
-            space.name,
+            pageName,
             "127.0.0.1",
             "127.0.0.1",
             page.lastModifierId,
             "",  # extra currently unused
-            wikiutil.clean_input(page.versionComment)
+            wikiutil.clean_input(config.COMMENT)
         ))
 
         revisionsPath = join(pageNamePath, "revisions")
         makedirs(revisionsPath)
 
-        self._write(join(revisionsPath, "00000001"), moinmoinMarkup.getvalue())
+        pageContent = moinmoinMarkup = self._addConvertPrefix(moinmoinMarkup.getvalue())
+        self._write(join(revisionsPath, "00000001"), pageContent)
 
         # TODO: attachments
+
+    def _addConvertPrefix(self, text):
+        return config.PAGE_PREFIX + text
+
 
     def _write(self, filename, content):
         # encoding='utf-8'
@@ -209,7 +233,7 @@ class MoinMoinWriter():
         with codecs.open(filename, 'w', encoding='utf-8') as f:
             f.write(content)
 
-    def makeFullPageName(self, page):
+    def _makeFullPageName(self, page):
         path = ""
         currentPage = page
         while True:
@@ -239,6 +263,7 @@ class MoinMoinWriter():
 
             self.writePage(page.id)
 
+
 class MoinMoinUsers():
     USER_FILE_RE = re.compile(r'^[0-9\.]+$')
 
@@ -249,8 +274,8 @@ class MoinMoinUsers():
         self.folder = folder
         self._readUserFromFolder()
 
-        if MoinMoinUsers.all.has_key(common.DEFAULT_USER) is False:
-            raise RuntimeError("no default user (%s) found." % common.DEFAULT_USER)
+        if MoinMoinUsers.all.has_key(config.DEFAULT_USER) is False:
+            raise RuntimeError("no default user (%s) found." % config.DEFAULT_USER)
 
     def _readUserFromFolder(self):
         MoinMoinUsers.all = {}
@@ -274,7 +299,15 @@ class MoinMoinUsers():
 if __name__ == '__main__':
     # XML_FILE = "testdata/full/xmlexport-20140725-202414-6780/entities.xml"
     XML_FILE = "testdata/simple-confluence.xml"
-    SPACES = map(lambda s: s.lower(), ["pub", "mainframe", "intern", "minutes", "besch", "tec"])
+    # current key -> new key
+    SPACES = {
+        "pub": "public",
+        "mainframe": "mainframe",
+        "intern": "intern",
+        "minutes": "protokolle",
+        "besch": "beschluesse",
+        "tec": "technik"
+    }
 
     MoinMoinUsers("/Users/holger/Dropbox/Proj/mainframe/wikiConverters/output/users")
 
@@ -294,15 +327,8 @@ if __name__ == '__main__':
         elif className == "BodyContent":
             BodyContent(obj)
 
-    # rename all "Home" pages to their space key
-    for page in Page.topPages.values():
-        if not page.title == "Home":
-            continue
-        # find space
-        space = Space.all.get(page.spaceId)
-        if space is None: raise StandardError("No space found for 'Home' page id " + page.spaceId)
-        page.title = space.key
-
+    Space.renameSpaces(SPACES)
+    Page.renameHomePages()
 
     print("Spaces:")
     for space in Space.all.values():
@@ -310,20 +336,21 @@ if __name__ == '__main__':
 
     # print("Top Pages")
     # for topPage in Page.topPages.values():
-    #     print(topPage)
+    # print(topPage)
 
     # print("Pages:")
     # for page in Page.all.values():
-    #     print(page)
+    # print(page)
 
     # print("Contents:")
     # for content in BodyContent.all.values():
-    #     print(content)
+    # print(content)
 
     # print("Attachments")
     # for att in Attachment.all.values():
     #     print(att)
 
+
     writer = MoinMoinWriter("/Users/holger/Dropbox/Proj/mainframe/wikiConverters/output/pages")
-    # writer.writePageForSpaces(SPACES)
+    # writer.writePageForSpaces(SPACES.values())
     writer.writePage("13697061")
