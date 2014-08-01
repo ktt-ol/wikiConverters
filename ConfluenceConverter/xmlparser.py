@@ -361,7 +361,8 @@ class ConfluenceXMLParser(Parser):
                 conversion = "%s#!wiki %s\n\n%%s\n%s" % (opening, details, closing)
 
             elif name == "table":
-                conversion = "%s#!table\n%%s\n%s" % (opening, closing)
+                #conversion = "%s#!table\n%%s\n%s" % (opening, closing)
+                conversion = "||%s||"
 
             else:
                 # Preformatted sections containing newlines must contain an initial
@@ -428,11 +429,13 @@ class ConfluenceXMLParser(Parser):
 
         if name in ("th", "td"):
             if self.table_columns:
-                text = "\n|| %s" % text
+                # text = "\n|| %s" % text
+                text = "||%s" % text
             self.table_columns += 1
         elif name == "tr":
             if self.table_rows:
-                text = "\n==\n%s" % text
+                # text = "\n==\n%s" % text
+                text = "||\n||%s" % text
             self.table_rows += 1
 
         # Postprocess held anchor tags in headings.
