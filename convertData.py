@@ -86,7 +86,10 @@ class Space():
     @classmethod
     def renameSpaces(cls, newSpaceKeyDic):
         for space in cls.all.values():
-            space.key = newSpaceKeyDic[space.key]
+            newKey = newSpaceKeyDic.get(space.key)
+            if newKey is None:
+                continue
+            space.key = newKey
 
 
 class Page():
@@ -297,8 +300,8 @@ class MoinMoinUsers():
 
 
 if __name__ == '__main__':
-    # XML_FILE = "testdata/full/xmlexport-20140725-202414-6780/entities.xml"
-    XML_FILE = "testdata/simple-confluence.xml"
+    XML_FILE = "testdata/full/xmlexport-20140725-202414-6780/entities.xml"
+    # XML_FILE = "testdata/simple-confluence.xml"
     # current key -> new key
     SPACES = {
         "pub": "public",
@@ -352,5 +355,5 @@ if __name__ == '__main__':
 
 
     writer = MoinMoinWriter("/Users/holger/Dropbox/Proj/mainframe/wikiConverters/output/pages")
-    # writer.writePageForSpaces(SPACES.values())
-    writer.writePage("13697061")
+    writer.writePageForSpaces(SPACES.values())
+    # writer.writePage("13697061")
