@@ -11,17 +11,18 @@ import xml.etree.ElementTree as ET
 import time
 import calendar
 from os import makedirs, listdir
-from os.path import join, exists
+from os.path import join, exists, dirname
+import shutil
 import re
 import StringIO
+import urllib
+import argparse
+
 import codecs
 
 import wikiutil
 import config
 from ConfluenceConverter.xmlparser import parse
-
-
-
 
 
 # from "convert.py"
@@ -59,6 +60,10 @@ def toString(obj, attributes):
         buffer = buffer + val + ": " + s + ", "
 
     return buffer
+
+
+class IncompleteData(Exception):
+    pass
 
 
 class Space():
@@ -116,10 +121,10 @@ class Page():
         self.title = getPropText(node, "title")
         self.contentId = self._readBody(node)
         name = getPropText(node, "lastModifierName")
-        self.lastModifierId = MoinMoinUsers.all.get(name)
-        if self.lastModifierId is None:
-            self.lastModifierId = MoinMoinUsers.all.get(config.DEFAULT_USER)
+        self.lastModifierId = MoinMoinUsers.getUserIdForName(name)
         self.lastModificationDate = date_to_seconds(getPropText(node, "lastModificationDate"))
+
+        self._readAttachments(node)
 
         Page.all[self.id] = self
         if self.parentId is None:
@@ -133,6 +138,17 @@ class Page():
         element = collection.find("./element[@class='BodyContent']")
         if element is None: raise BaseException("Page without body! " + self.id)
         return getId(element)
+
+    def _readAttachments(self, node):
+        self.attachments = []
+        collection = node.find("./collection[@name='attachments']")
+        if collection is None:
+            return
+
+        for attElement in collection.findall("./element[@class='Attachment']"):
+            id = getId(attElement)
+            self.attachments.append(id)
+
 
     def __str__(self):
         return toString(self, ['id', 'title', 'spaceId', 'parent', 'contentId'])
@@ -157,6 +173,16 @@ class Attachment():
     def __init__(self, node):
         self.id = getId(node)
         self.filename = getPropText(node, "fileName")
+        self.lastModificationDate = date_to_seconds(getPropText(node, "lastModificationDate"))
+        name = getPropText(node, "creatorName")
+        self.creatorNameId = MoinMoinUsers.getUserIdForName(name)
+        self.version = getPropText(node, "attachmentVersion")
+        original = getProp(node, "originalVersion")
+        if original is None:
+            # this means that this is the most recent version
+            self.originalVersion = None
+        else:
+            self.originalVersion = getId(node)
 
         Attachment.all[self.id] = self
 
@@ -181,7 +207,8 @@ class BodyContent():
 
 
 class MoinMoinWriter():
-    def __init__(self, outputFolder):
+    def __init__(self, attachmentFolder, outputFolder):
+        self.attachmentFolder = attachmentFolder
         self.outputFolder = outputFolder
 
     def writePage(self, pageId):
@@ -205,7 +232,9 @@ class MoinMoinWriter():
 
         self._write(join(pageNamePath, "current"), "00000001")
         # http://moinmo.in/MoinDev/Storage
-        self._write(join(pageNamePath, "edit-log"), "%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\n" % (
+
+        editLogData = []
+        editLogData.append("%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\n" % (
             page.lastModificationDate * 1000000,
             "00000001",
             "SAVENEW",
@@ -217,13 +246,57 @@ class MoinMoinWriter():
             wikiutil.clean_input(config.COMMENT)
         ))
 
+        for attachmentId in page.attachments:
+            line = self._addAttachment(page, pageName, pageNamePath, attachmentId)
+            if line is not None: editLogData.append(line)
+
+        self._write(join(pageNamePath, "edit-log"), "".join(editLogData))
+
         revisionsPath = join(pageNamePath, "revisions")
         makedirs(revisionsPath)
 
-        pageContent = moinmoinMarkup = self._addConvertPrefix(moinmoinMarkup.getvalue())
+        pageContent = self._addConvertPrefix(moinmoinMarkup.getvalue())
         self._write(join(revisionsPath, "00000001"), pageContent)
 
-        # TODO: attachments
+
+    def _addAttachment(self, page, pageName, pageNamePath, attachmentId):
+        attachment = Attachment.all.get(attachmentId)
+        if attachment is None: raise IncompleteData("No attachment found for id %s and page id %s" % (attachmentId, page.id))
+        if attachment.originalVersion is not None:
+            # we only want to have the most recent version
+            return
+
+        sourceFilePath = join(self.attachmentFolder, page.id, attachmentId, attachment.version)
+        if not exists(sourceFilePath):
+            raise IncompleteData(
+                "Attachment with id %s for page id %s not found. I've expected it here '%s'" % (attachmentId, page.id, sourceFilePath))
+
+        attachmentPath = join(pageNamePath, "attachments")
+        if not exists(attachmentPath):
+            makedirs(attachmentPath)
+
+        filename = wikiutil.taintfilename(attachment.filename)
+        targetFilePath = join(attachmentPath, filename)
+
+        shutil.copy(sourceFilePath, targetFilePath)
+
+        if attachment.lastModificationDate < page.lastModificationDate:
+            attachmentTime = attachment.lastModificationDate
+        else:
+            attachmentTime = page.lastModificationDate
+
+        # 1407004115054438        99999999        ATTNEW  attTest 192.168.56.1    192.168.56.1    1406319234.36.47302     1.txt
+        return "%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\n" % (
+            attachmentTime * 1000000,
+            "99999999",
+            "ATTNEW",
+            pageName,
+            "127.0.0.1",
+            "127.0.0.1",
+            attachment.creatorNameId,
+            "",  # extra currently unused
+            urllib.quote(print_safe(filename))
+        )
 
     def _addConvertPrefix(self, text):
         return config.PAGE_PREFIX + text
@@ -272,6 +345,7 @@ class MoinMoinUsers():
 
     # name -> id (= filename)
     all = {}
+    defaultUserId = None
 
     def __init__(self, folder):
         self.folder = folder
@@ -279,6 +353,19 @@ class MoinMoinUsers():
 
         if MoinMoinUsers.all.has_key(config.DEFAULT_USER) is False:
             raise RuntimeError("no default user (%s) found." % config.DEFAULT_USER)
+        MoinMoinUsers.defaultUserId = MoinMoinUsers.all.get(config.DEFAULT_USER)
+
+    @classmethod
+    def getUserIdForName(clz, name):
+        """
+        :param name:
+        :return: the user for the given id or the default user else
+        """
+        userId = clz.all.get(name)
+        if userId is None:
+            return clz.defaultUserId
+        return userId
+
 
     def _readUserFromFolder(self):
         MoinMoinUsers.all = {}
@@ -300,23 +387,19 @@ class MoinMoinUsers():
 
 
 if __name__ == '__main__':
-    XML_FILE = "testdata/full/xmlexport-20140725-202414-6780/entities.xml"
-    # XML_FILE = "testdata/simple-confluence.xml"
-    # current key -> new key
-    SPACES = {
-        "pub": "public",
-        "mainframe": "mainframe",
-        "intern": "intern",
-        "minutes": "protokolle",
-        "besch": "beschluesse",
-        "tec": "technik"
-    }
 
-    MoinMoinUsers("/Users/holger/Dropbox/Proj/mainframe/wikiConverters/output/users")
+    parser = argparse.ArgumentParser(description='Convert pages')
+    parser.add_argument('--xmlInputFile', type=str, required=True, help='The crowd backup file (xml)')
+    parser.add_argument('--attachmentPath', type=str, required=True, help='The path to the folder containing the confluence attachments.')
+    parser.add_argument('--convertedUserPath', type=str, required=True, help='The path to the folder containing the converted users.')
+    parser.add_argument('--outputPath', type=str, required=True, help='The output path. The pages will be created here.')
+    args = parser.parse_args()
 
-    print("loading...")
-    tree = ET.parse(XML_FILE)
-    print("done")
+    MoinMoinUsers(args.convertedUserPath)
+
+    print("loading & parse xml file...")
+    tree = ET.parse(args.xmlInputFile)
+    print("create MoinMoin pages & attachments...")
 
     for obj in tree.findall("./object"):
         className = obj.attrib["class"]
@@ -330,12 +413,14 @@ if __name__ == '__main__':
         elif className == "BodyContent":
             BodyContent(obj)
 
-    Space.renameSpaces(SPACES)
+    Space.renameSpaces(config.SPACES)
     Page.renameHomePages()
 
-    print("Spaces:")
-    for space in Space.all.values():
-        print(space)
+    # debug
+
+    # print("Spaces:")
+    # for space in Space.all.values():
+    #     print(space)
 
     # print("Top Pages")
     # for topPage in Page.topPages.values():
@@ -351,9 +436,10 @@ if __name__ == '__main__':
 
     # print("Attachments")
     # for att in Attachment.all.values():
-    #     print(att)
+    # print(att)
 
 
-    writer = MoinMoinWriter("/Users/holger/Dropbox/Proj/mainframe/wikiConverters/output/pages")
-    writer.writePageForSpaces(SPACES.values())
-    # writer.writePage("13697061")
+    writer = MoinMoinWriter(attachmentFolder=args.attachmentPath, outputFolder=args.outputPath)
+    writer.writePageForSpaces(config.SPACES.values())
+
+    print("Finished.")
