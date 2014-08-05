@@ -47,6 +47,7 @@ The following settings are found to be useful, at least for us. Apply it before 
 
 # Issues
 
+* Internal links are broken
 * No history will be converted. Only the most recent page and most recent attachment version is used. 
 * No acls!
 
