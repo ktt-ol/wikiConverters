@@ -121,6 +121,8 @@ class Page():
         else:
             self.parentId = None
         self.title = getPropText(node, "title")
+        # remove / from the page title
+        self.title = re.sub(r'/','-', self.title)
         self.contentId = self._readBody(node)
         name = getPropText(node, "lastModifierName")
         self.lastModifierId = MoinMoinUsers.getUserIdForName(name)
