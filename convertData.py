@@ -52,6 +52,8 @@ def print_safe(obj):
     else:
         return str(obj)
 
+def replace_non_ascii_chars(input):
+    return re.sub(r'[^\x00-\x7F]+','_', input)
 
 def toString(obj, attributes):
     buffer = ""
@@ -276,6 +278,7 @@ class MoinMoinWriter():
             makedirs(attachmentPath)
 
         filename = wikiutil.taintfilename(attachment.filename)
+        filename = replace_non_ascii_chars(filename)
         targetFilePath = join(attachmentPath, filename)
 
         shutil.copy(sourceFilePath, targetFilePath)
