@@ -121,7 +121,7 @@ def listUsersForGroup(input, groupName):
 
     for membership in root.findall("./memberships/membership"):
         if membership.find("parentName").text == groupName:
-            print(membership.find("childName").text)
+            print(" * %s" % membership.find("childName").text)
 
 
 if __name__ == '__main__':
