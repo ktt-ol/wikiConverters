@@ -123,7 +123,6 @@ macro_rich_text_styles = {
 macroargs = {
     # Confluence macro        Confluence and MoinMoin macro arguments
     "color"                 : ("color", "col"),
-    "status": ("colour", "title"),
     }
 
 macrotypes = {
@@ -131,7 +130,6 @@ macrotypes = {
     "anchor"                : "<<Anchor(%(anchor)s)>>",
     "color"                 : "<<Color2(%(content)s, %(args)s)>>",
     "toc"                   : "<<TableOfContents>>",
-    "status"                : "{{{#!wiki status/status-%(colour)s\n- %(title)s\n}}}"
     }
 
 normalise_regexp_str = r"\s+"
@@ -402,18 +400,26 @@ class ConfluenceXMLParser(Parser):
         # simpler macros are handled here.
 
         elif name == "ac:macro":
-            conversion = macrotypes.get(self.macros[-1])
-            if conversion:
+            # special handling for this macro, because sometimes some attributes are missing
+            if self.macros[-1] == "status":
                 parameters = {"content" : text}
-                parameters.update(self.macro_parameters[-1])
-                argnames = macroargs.get(self.macros[-1])
-                if argnames:
-                    confargname, moinargname = argnames
-                    parameters["args"] = quote_macro_argument("%s=%s" % (moinargname, self.macro_parameters[-1][confargname]))
-                text = conversion % parameters
-                if self.macros[-1] == "anchor" and self.forbids_macros():
-                    self.held_anchors.append(text)
-                    text = ""
+                color = self.macro_parameters[-1].get("colour") or "grey"
+                color = color.lower()
+                title = self.macro_parameters[-1].get("title") or "-"
+                text = "{{{#!wiki status/status-%s\n%s\n}}}" % (color, title)
+            else:
+                conversion = macrotypes.get(self.macros[-1])
+                if conversion:
+                    parameters = {"content" : text}
+                    parameters.update(self.macro_parameters[-1])
+                    argnames = macroargs.get(self.macros[-1])
+                    if argnames:
+                        confargname, moinargname = argnames
+                        parameters["args"] = quote_macro_argument("%s=%s" % (moinargname, self.macro_parameters[-1][confargname]))
+                    text = conversion % parameters
+                    if self.macros[-1] == "anchor" and self.forbids_macros():
+                        self.held_anchors.append(text)
+                        text = ""
 
         # Handle the common cases for parameterised and unparameterised
         # substitutions.

@@ -230,7 +230,11 @@ class MoinMoinWriter():
         if exists(pageNamePath): raise StandardError("Page %s already exists in output folder. Will not overwrite anything." % pageName)
 
         moinmoinMarkup = StringIO.StringIO()
-        parse(content.body, moinmoinMarkup)
+        try:
+            parse(content.body, moinmoinMarkup)
+        except Exception as e:
+            print("Markup parsing error for page %s.\nBodyContent: %s" % (pageId, content.body))
+            raise
 
         makedirs(pageNamePath)
 

@@ -8,21 +8,17 @@
 .status p {
     margin: 0;
 }
-.status.status-green,
-.status.status-Green{
+.status.status-green {
   background-color: #14892c;
   color:#fff;
 }
-.status.status-yellow,
-.status.status-Yellow {
+.status.status-yellow {
   background-color: #ffd351;
 }
-.status.status-red,
-.status.status-Red {
+.status.status-red {
   background-color: #d04437;
   color:#fff;
 }
-.status.status-grey,
-.status.status-Grey {
+.status.status-grey {
   background-color: #cccccc;
 }
