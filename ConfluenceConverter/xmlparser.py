@@ -123,6 +123,7 @@ macro_rich_text_styles = {
 macroargs = {
     # Confluence macro        Confluence and MoinMoin macro arguments
     "color"                 : ("color", "col"),
+    "status": ("colour", "title"),
     }
 
 macrotypes = {
@@ -130,6 +131,7 @@ macrotypes = {
     "anchor"                : "<<Anchor(%(anchor)s)>>",
     "color"                 : "<<Color2(%(content)s, %(args)s)>>",
     "toc"                   : "<<TableOfContents>>",
+    "status"                : "{{{#!wiki status/status-%(colour)s\n- %(title)s\n}}}"
     }
 
 normalise_regexp_str = r"\s+"

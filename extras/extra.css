@@ -1,0 +1,28 @@
+.status {
+  width: 100px;
+  text-align: center;
+  padding: 3px 5px 2px 5px;
+  border: 1px solid #ccc;
+  border-radius: 3px;
+}
+.status p {
+    margin: 0;
+}
+.status.status-green,
+.status.status-Green{
+  background-color: #14892c;
+  color:#fff;
+}
+.status.status-yellow,
+.status.status-Yellow {
+  background-color: #ffd351;
+}
+.status.status-red,
+.status.status-Red {
+  background-color: #d04437;
+  color:#fff;
+}
+.status.status-grey,
+.status.status-Grey {
+  background-color: #cccccc;
+}
