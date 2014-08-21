@@ -406,7 +406,7 @@ class ConfluenceXMLParser(Parser):
                 color = self.macro_parameters[-1].get("colour") or "grey"
                 color = color.lower()
                 title = self.macro_parameters[-1].get("title") or "-"
-                text = "{{{#!wiki status/status-%s\n%s\n}}}" % (color, title)
+                text = "{{{#!wiki macro-status/status-%s\n%s\n}}}" % (color, title)
             else:
                 conversion = macrotypes.get(self.macros[-1])
                 if conversion:

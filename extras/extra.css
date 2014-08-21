@@ -1,24 +1,24 @@
-.status {
+.macro-status {
   width: 100px;
   text-align: center;
   padding: 3px 5px 2px 5px;
   border: 1px solid #ccc;
   border-radius: 3px;
 }
-.status p {
+.macro-status p {
     margin: 0;
 }
-.status.status-green {
+.macro-status.status-green {
   background-color: #14892c;
   color:#fff;
 }
-.status.status-yellow {
+.macro-status.status-yellow {
   background-color: #ffd351;
 }
-.status.status-red {
+.macro-status.status-red {
   background-color: #d04437;
   color:#fff;
 }
-.status.status-grey {
+.macro-status.status-grey {
   background-color: #cccccc;
 }
